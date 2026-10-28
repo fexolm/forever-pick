@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ForeverPick — рандомайзер группы</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0b0a0f;
+  --panel: #15131b;
+  --panel-2: #1d1a25;
+  --line: #2e2938;
+  --text: #ece6d8;
+  --muted: #9a92a6;
+  --gold: #e8b64c;
+  --gold-2: #f6d27a;
+  --alliance: #3a7bd5;
+  --horde: #c0392b;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background:
+    radial-gradient(1200px 600px at 50% -10%, rgba(232,182,76,.12), transparent 60%),
+    radial-gradient(900px 500px at 100% 100%, rgba(120,60,200,.10), transparent 60%),
+    var(--bg);
+  color: var(--text);
+  font: 15px/1.5 Inter, system-ui, sans-serif;
+  min-height: 100vh;
+}
+.wrap { max-width: 1120px; margin: 0 auto; padding: 32px 16px 64px; }
+header { text-align: center; margin-bottom: 28px; }
+.kicker { color: var(--gold); letter-spacing: .25em; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+h1 {
+  font-family: Cinzel, serif; font-weight: 800; font-size: clamp(30px, 5vw, 48px);
+  margin: 6px 0 8px; letter-spacing: .02em;
+  background: linear-gradient(180deg, var(--gold-2), var(--gold) 60%, #a67a22);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.sub { color: var(--muted); max-width: 620px; margin: 0 auto; }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+
+.card {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--line); border-radius: 16px; padding: 20px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.35);
+}
+.card h2 { font-family: Cinzel, serif; font-size: 16px; letter-spacing: .08em; margin: 0 0 14px; color: var(--gold-2); text-transform: uppercase; }
+.label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .12em; margin: 0 0 8px; }
+
+.seg { display: flex; background: #0f0d14; border: 1px solid var(--line); border-radius: 12px; padding: 4px; gap: 4px; }
+.seg button {
+  flex: 1; border: 0; background: transparent; color: var(--muted); padding: 10px 12px; border-radius: 9px;
+  font: 600 14px Inter, sans-serif; cursor: pointer; transition: .15s;
+}
+.seg button:hover { color: var(--text); }
+.seg button.on[data-f="alliance"] { background: var(--alliance); color: #fff; box-shadow: 0 0 20px rgba(58,123,213,.4); }
+.seg button.on[data-f="horde"] { background: var(--horde); color: #fff; box-shadow: 0 0 20px rgba(192,57,43,.4); }
+
+.count { display: flex; align-items: center; gap: 10px; }
+.count button {
+  width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: #0f0d14; color: var(--text);
+  font-size: 18px; cursor: pointer;
+}
+.count button:disabled { opacity: .35; cursor: default; }
+.count span { font: 700 18px Cinzel, serif; min-width: 20px; text-align: center; }
+
+.players { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.player { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+@media (max-width: 520px) {
+  .player { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .player input { grid-column: 1 / -1; }
+}
+input, select {
+  width: 100%; background: #0f0d14; color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; font: 14px Inter, sans-serif; outline: none;
+}
+input:focus, select:focus { border-color: var(--gold); }
+select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 26px; }
+.cols { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; margin-top: 18px; }
+@media (max-width: 520px) { .cols { display: none; } }
+
+.roll {
+  margin-top: 20px; width: 100%; padding: 14px; border-radius: 12px; cursor: pointer;
+  border: 1px solid #f6d27a; color: #1a1205; font: 800 16px Cinzel, serif; letter-spacing: .1em; text-transform: uppercase;
+  background: linear-gradient(180deg, var(--gold-2), var(--gold) 55%, #b98424);
+  box-shadow: 0 6px 30px rgba(232,182,76,.35), inset 0 1px 0 rgba(255,255,255,.5);
+  transition: transform .1s, filter .15s;
+}
+.roll:hover { filter: brightness(1.08); }
+.roll:active { transform: translateY(1px); }
+.roll:disabled { filter: grayscale(.7) brightness(.7); cursor: default; }
+
+.wheel-box { position: relative; width: min(100%, 420px); aspect-ratio: 1; margin: 0 auto; }
+.wheel-box canvas { width: 100%; height: 100%; display: block; }
+.pointer {
+  position: absolute; left: 50%; top: -6px; transform: translateX(-50%);
+  width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent; border-top: 26px solid var(--gold-2);
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.6)); z-index: 2;
+}
+.wheel-title { text-align: center; min-height: 52px; margin-bottom: 10px; }
+.wheel-title .who { font: 700 20px Cinzel, serif; color: var(--text); }
+.wheel-title .what { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: .15em; }
+
+table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+th { text-align: left; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+td { padding: 10px 8px; border-bottom: 1px solid rgba(46,41,56,.6); font-weight: 600; }
+td:first-child { color: var(--text); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+tr.active td { background: rgba(232,182,76,.07); }
+.chip { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 13px; border: 1px solid currentColor; animation: pop .35s ease-out; white-space: nowrap; }
+.pending { color: #4a4356; }
+@keyframes pop { 0% { transform: scale(.6); opacity: 0; } 70% { transform: scale(1.08); } 100% { transform: scale(1); opacity: 1; } }
+.err { color: #ff7b6b; font-size: 13px; margin-top: 10px; min-height: 1em; }
+footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 32px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">WoW Forever</div>
+    <h1>Рандомайзер группы</h1>
+    <p class="sub">Выбери фракцию, впиши от 1 до 5 игроков, каждый может забанить один класс и одну расу. Сначала всем выпадает роль, потом класс (поровну среди классов этой роли), потом раса под класс.</p>
+  </header>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Группа</h2>
+      <div class="label">Фракция</div>
+      <div class="seg" id="faction">
+        <button data-f="alliance" class="on">Альянс</button>
+        <button data-f="horde">Орда</button>
+      </div>
+
+      <div class="label" style="margin-top:18px">Игроков</div>
+      <div class="count">
+        <button id="minus" aria-label="Меньше">−</button>
+        <span id="n">5</span>
+        <button id="plus" aria-label="Больше">+</button>
+      </div>
+
+      <div class="cols"><div>Имя</div><div>Бан класса</div><div>Бан расы</div></div>
+      <div class="players" id="players"></div>
+
+      <button class="roll" id="roll">Крутить</button>
+      <div class="err" id="err"></div>
+    </section>
+
+    <section class="card">
+      <div class="wheel-title"><div class="what" id="what">&nbsp;</div><div class="who" id="who">Готов к роллу</div></div>
+      <div class="wheel-box">
+        <div class="pointer"></div>
+        <canvas id="wheel" width="840" height="840"></canvas>
+      </div>
+      <table>
+        <thead><tr><th>Игрок</th><th>Роль</th><th>Класс</th><th>Раса</th></tr></thead>
+        <tbody id="results"></tbody>
+      </table>
+    </section>
+  </div>
+  <footer>Расы и классы по матрице WoW Forever (бета).</footer>
+</div>
+
+<script>
+const CLASSES = {
+  warrior: { name: 'Воин', color: '#C79C6E' },
+  paladin: { name: 'Паладин', color: '#F58CBA' },
+  hunter:  { name: 'Охотник', color: '#ABD473' },
+  rogue:   { name: 'Разбойник', color: '#FFF569' },
+  priest:  { name: 'Жрец', color: '#FFFFFF' },
+  shaman:  { name: 'Шаман', color: '#2E8BFF' },
+  mage:    { name: 'Маг', color: '#69CCF0' },
+  warlock: { name: 'Чернокнижник', color: '#9482C9' },
+  druid:   { name: 'Друид', color: '#FF7D0A' },
+};
+
+const ROLES = {
+  tank: { name: 'Танк', color: '#5b8def', classes: ['warrior', 'paladin', 'druid'] },
+  heal: { name: 'Хил', color: '#4cd27a', classes: ['priest', 'paladin', 'shaman', 'druid'] },
+  dps:  { name: 'ДД', color: '#e05555', classes: Object.keys(CLASSES) },
+};
+// Dungeon composition: roles are drawn without replacement from this pool.
+const ROLE_POOL = ['tank', 'heal', 'dps', 'dps', 'dps'];
+
+const RACES = {
+  alliance: {
+    human:    { name: 'Человек', classes: ['warrior', 'paladin', 'hunter', 'rogue', 'priest', 'mage', 'warlock'] },
+    dwarf:    { name: 'Дворф', classes: ['warrior', 'paladin', 'hunter', 'rogue', 'priest', 'shaman'] },
+    nightelf: { name: 'Ночной эльф', classes: ['warrior', 'hunter', 'rogue', 'priest', 'druid'] },
+    gnome:    { name: 'Гном', classes: ['warrior', 'rogue', 'priest', 'mage', 'warlock'] },
+    skyborne: { name: 'Skyborne', classes: ['warrior', 'hunter', 'rogue', 'mage', 'druid'] },
+  },
+  horde: {
+    orc:      { name: 'Орк', classes: ['warrior', 'hunter', 'rogue', 'shaman', 'mage', 'warlock'] },
+    undead:   { name: 'Нежить', classes: ['warrior', 'paladin', 'rogue', 'priest', 'mage', 'warlock'] },
+    tauren:   { name: 'Таурен', classes: ['warrior', 'hunter', 'shaman', 'druid'] },
+    troll:    { name: 'Тролль', classes: ['warrior', 'hunter', 'rogue', 'priest', 'shaman', 'mage', 'warlock'] },
+    skyborne: { name: 'Skyborne', classes: ['warrior', 'hunter', 'rogue', 'shaman', 'druid'] },
+  },
+};
+const RACE_COLORS = ['#c9a25a', '#8e6bd1', '#4fa3a5', '#c25b5b', '#6d9e4a'];
+
+const state = { faction: 'alliance', n: 5, players: [], rolling: false };
+for (let i = 0; i < 5; i++) state.players.push({ name: '', banClass: '', banRace: '' });
+
+const $ = (id) => document.getElementById(id);
+
+function randInt(n) {
+  const a = new Uint32Array(1);
+  crypto.getRandomValues(a);
+  return a[0] % n;
+}
+
+function renderPlayers() {
+  const races = RACES[state.faction];
+  $('players').innerHTML = '';
+  for (let i = 0; i < state.n; i++) {
+    const p = state.players[i];
+    const row = document.createElement('div');
+    row.className = 'player';
+    row.innerHTML = `
+      <input placeholder="Игрок ${i + 1}" maxlength="24">
+      <select><option value="">Без бана класса</option>${Object.entries(CLASSES).map(([k, c]) => `<option value="${k}">${c.name}</option>`).join('')}</select>
+      <select><option value="">Без бана расы</option>${Object.entries(races).map(([k, r]) => `<option value="${k}">${r.name}</option>`).join('')}</select>`;
+    const [inp, sc, sr] = row.children;
+    inp.value = p.name; sc.value = p.banClass; sr.value = p.banRace;
+    inp.oninput = () => { p.name = inp.value; renderResults(); };
+    sc.onchange = () => { p.banClass = sc.value; };
+    sr.onchange = () => { p.banRace = sr.value; };
+    $('players').appendChild(row);
+  }
+  $('n').textContent = state.n;
+  $('minus').disabled = state.n <= 1 || state.rolling;
+  $('plus').disabled = state.n >= 5 || state.rolling;
+  renderResults();
+}
+
+let results = [];
+function playerName(i) { return state.players[i].name.trim() || `Игрок ${i + 1}`; }
+function renderResults(active = -1) {
+  const chip = (txt, color) => txt ? `<span class="chip" style="color:${color}">${txt}</span>` : '<span class="pending">—</span>';
+  $('results').innerHTML = Array.from({ length: state.n }, (_, i) => {
+    const r = results[i] || {};
+    const races = RACES[state.faction];
+    return `<tr class="${i === active ? 'active' : ''}"><td>${escapeHtml(playerName(i))}</td>
+      <td>${r.role ? chip(ROLES[r.role].name, ROLES[r.role].color) : chip()}</td>
+      <td>${r.cls ? chip(CLASSES[r.cls].name, CLASSES[r.cls].color) : chip()}</td>
+      <td>${r.race ? chip(races[r.race].name, '#e8d8b0') : chip()}</td></tr>`;
+  }).join('');
+}
+function escapeHtml(s) { return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+// Classes the player can actually get for a role: not banned and with at least one non-banned race in the faction.
+function validClasses(role, p) {
+  const races = RACES[state.faction];
+  return ROLES[role].classes.filter((c) => c !== p.banClass &&
+    Object.entries(races).some(([rk, r]) => rk !== p.banRace && r.classes.includes(c)));
+}
+function validRaces(cls, p) {
+  return Object.entries(RACES[state.faction]).filter(([rk, r]) => rk !== p.banRace && r.classes.includes(cls)).map(([rk]) => rk);
+}
+
+/* ---------- Sound ---------- */
+let actx;
+function audio() {
+  if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === 'suspended') actx.resume();
+  return actx;
+}
+function tick() {
+  const ctx = audio(), t = ctx.currentTime;
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(1800, t);
+  o.frequency.exponentialRampToValueAtTime(600, t + 0.04);
+  g.gain.setValueAtTime(0.18, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+  o.connect(g).connect(ctx.destination);
+  o.start(t); o.stop(t + 0.06);
+}
+function chime() {
+  const ctx = audio(), t = ctx.currentTime;
+  [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = f;
+    const s = t + i * 0.07;
+    g.gain.setValueAtTime(0, s);
+    g.gain.linearRampToValueAtTime(0.14, s + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, s + 0.7);
+    o.connect(g).connect(ctx.destination);
+    o.start(s); o.stop(s + 0.75);
+  });
+}
+
+/* ---------- Wheel ---------- */
+const canvas = $('wheel'), ctx2d = canvas.getContext('2d');
+let wheelItems = [{ label: 'ForeverPick', color: '#e8b64c' }];
+let angle = 0; // radians, rotation of the wheel
+
+function shade(hex, k) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.round(((n >> 16) & 255) * k), g = Math.round(((n >> 8) & 255) * k), b = Math.round((n & 255) * k);
+  return `rgb(${r},${g},${b})`;
+}
+function drawWheel() {
+  const W = canvas.width, c = W / 2, R = c - 18;
+  ctx2d.clearRect(0, 0, W, W);
+  // outer ring
+  ctx2d.beginPath(); ctx2d.arc(c, c, R + 12, 0, Math.PI * 2);
+  const ring = ctx2d.createLinearGradient(0, 0, 0, W);
+  ring.addColorStop(0, '#f6d27a'); ring.addColorStop(.5, '#a67a22'); ring.addColorStop(1, '#f6d27a');
+  ctx2d.fillStyle = ring; ctx2d.fill();
+
+  const n = wheelItems.length, seg = (Math.PI * 2) / n;
+  for (let i = 0; i < n; i++) {
+    const a0 = angle + i * seg - Math.PI / 2, a1 = a0 + seg;
+    const it = wheelItems[i];
+    const grad = ctx2d.createRadialGradient(c, c, R * 0.15, c, c, R);
+    grad.addColorStop(0, shade(it.color, 0.22));
+    grad.addColorStop(1, shade(it.color, i % 2 ? 0.5 : 0.62));
+    ctx2d.beginPath(); ctx2d.moveTo(c, c); ctx2d.arc(c, c, R, a0, a1); ctx2d.closePath();
+    ctx2d.fillStyle = grad; ctx2d.fill();
+    ctx2d.strokeStyle = 'rgba(246,210,122,.55)'; ctx2d.lineWidth = 3; ctx2d.stroke();
+
+    ctx2d.save();
+    ctx2d.translate(c, c); ctx2d.rotate(a0 + seg / 2);
+    ctx2d.textAlign = 'right'; ctx2d.textBaseline = 'middle';
+    const fs = Math.min(40, Math.max(22, 300 / Math.max(it.label.length, 6)));
+    ctx2d.font = `700 ${fs}px Cinzel, serif`;
+    ctx2d.fillStyle = it.color; ctx2d.shadowColor = 'rgba(0,0,0,.8)'; ctx2d.shadowBlur = 8;
+    ctx2d.fillText(it.label, R - 24, 0);
+    ctx2d.restore();
+  }
+  // hub
+  ctx2d.beginPath(); ctx2d.arc(c, c, R * 0.16, 0, Math.PI * 2);
+  const hub = ctx2d.createRadialGradient(c - 10, c - 10, 4, c, c, R * 0.16);
+  hub.addColorStop(0, '#fff3c4'); hub.addColorStop(1, '#a67a22');
+  ctx2d.fillStyle = hub; ctx2d.fill();
+  ctx2d.strokeStyle = '#1a1205'; ctx2d.lineWidth = 4; ctx2d.stroke();
+}
+
+function segmentAtPointer() {
+  const n = wheelItems.length, seg = (Math.PI * 2) / n;
+  const a = ((-angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  return Math.floor(a / seg) % n;
+}
+
+function spin(items, target, duration = 2600) {
+  wheelItems = items;
+  const n = items.length, seg = (Math.PI * 2) / n;
+  // Land so that the pointer (top) sits inside the target segment, at a random offset away from edges.
+  const offset = (0.15 + Math.random() * 0.7) * seg;
+  const base = ((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  const desired = (Math.PI * 2 - (target * seg + offset)) % (Math.PI * 2);
+  let delta = desired - base;
+  if (delta < 0) delta += Math.PI * 2;
+  const start = angle, total = delta + Math.PI * 2 * (4 + randInt(2));
+  let last = segmentAtPointer();
+  return new Promise((resolve) => {
+    const t0 = performance.now();
+    function frame(now) {
+      const t = Math.min(1, (now - t0) / duration);
+      const e = 1 - Math.pow(1 - t, 4);
+      angle = start + total * e;
+      drawWheel();
+      const cur = segmentAtPointer();
+      if (cur !== last) { tick(); last = cur; }
+      if (t < 1) requestAnimationFrame(frame);
+      else { chime(); setTimeout(resolve, 450); }
+    }
+    requestAnimationFrame(frame);
+  });
+}
+
+/* ---------- Roll flow ---------- */
+function setTitle(what, who) { $('what').textContent = what; $('who').textContent = who; }
+
+async function rollAll() {
+  if (state.rolling) return;
+  $('err').textContent = '';
+  audio();
+  state.rolling = true; setLocked(true);
+  results = Array.from({ length: state.n }, () => ({}));
+  renderResults();
+  const players = state.players.slice(0, state.n);
+  const races = RACES[state.faction];
+
+  // 1. Roles
+  const pool = ROLE_POOL.slice();
+  for (let i = 0; i < state.n; i++) {
+    const items = pool.map((r) => ({ label: ROLES[r].name, color: ROLES[r].color }));
+    const k = randInt(pool.length);
+    setTitle('Роль', playerName(i)); renderResults(i);
+    await spin(items, k);
+    results[i].role = pool[k]; pool.splice(k, 1);
+    renderResults(i);
+  }
+  // 2. Classes
+  for (let i = 0; i < state.n; i++) {
+    const opts = validClasses(results[i].role, players[i]);
+    if (!opts.length) { $('err').textContent = `${playerName(i)}: из-за банов не осталось классов для роли.`; continue; }
+    const k = randInt(opts.length);
+    setTitle(`Класс · ${ROLES[results[i].role].name}`, playerName(i)); renderResults(i);
+    await spin(opts.map((c) => ({ label: CLASSES[c].name, color: CLASSES[c].color })), k);
+    results[i].cls = opts[k];
+    renderResults(i);
+  }
+  // 3. Races
+  for (let i = 0; i < state.n; i++) {
+    if (!results[i].cls) continue;
+    const opts = validRaces(results[i].cls, players[i]);
+    const k = randInt(opts.length);
+    setTitle(`Раса · ${CLASSES[results[i].cls].name}`, playerName(i)); renderResults(i);
+    await spin(opts.map((r, j) => ({ label: races[r].name, color: RACE_COLORS[Object.keys(races).indexOf(r) % RACE_COLORS.length] })), k, opts.length === 1 ? 1400 : 2600);
+    results[i].race = opts[k];
+    renderResults(i);
+  }
+  setTitle('Готово', 'Группа собрана');
+  renderResults();
+  state.rolling = false; setLocked(false);
+}
+
+function setLocked(on) {
+  $('roll').disabled = on;
+  document.querySelectorAll('#players input, #players select, #faction button').forEach((el) => el.disabled = on);
+  $('minus').disabled = on || state.n <= 1;
+  $('plus').disabled = on || state.n >= 5;
+}
+
+$('faction').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b || state.rolling) return;
+  state.faction = b.dataset.f;
+  document.querySelectorAll('#faction button').forEach((x) => x.classList.toggle('on', x === b));
+  state.players.forEach((p) => p.banRace = '');
+  results = [];
+  renderPlayers();
+});
+$('minus').onclick = () => { if (state.n > 1) { state.n--; results = []; renderPlayers(); } };
+$('plus').onclick = () => { if (state.n < 5) { state.n++; results = []; renderPlayers(); } };
+$('roll').onclick = rollAll;
+
+renderPlayers();
+drawWheel();
+document.fonts && document.fonts.ready.then(drawWheel);
+</script>
+</body>
+</html>
