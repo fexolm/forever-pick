@@ -256,7 +256,8 @@ const ROLES = {
   dps:  { name: 'Боец', color: '#c0392b', icon: 'assets/role-dps.png', classes: Object.keys(CLASSES) },
 };
 // Dungeon composition: roles are drawn without replacement from this pool.
-const ROLE_POOL = ['tank', 'heal', 'dps', 'dps', 'dps'];
+// Groups of up to 3 roll from tank/heal/dps; bigger groups from the full 5-man set.
+const rolePool = (n) => n <= 3 ? ['tank', 'heal', 'dps'] : ['tank', 'heal', 'dps', 'dps', 'dps'];
 
 const RACES = {
   alliance: {
@@ -548,7 +549,7 @@ async function rollAll() {
   renderResults();
 
   // 1. Roles
-  const pool = ROLE_POOL.slice();
+  const pool = rolePool(N);
   for (let i = 0; i < N; i++) {
     const k = randInt(pool.length);
     setTitle('Роль', playerName(i)); renderResults(i);
