@@ -867,12 +867,13 @@ function lightning() {
   burst(wx, wy, '#9fd4ff', 80, 12);
 }
 
-// Spin to a predetermined segment. On the way, each time the wheel is about to stop there is a 20%
+// Spin to a predetermined segment. On the way, each time the wheel is about to stop there is a 10%
 // chance it gets kicked back into motion, again and again. Those intermediate near-stops land on
 // uniformly random segments and use Math.random, never the seeded RNG, so they don't change odds:
 // the final segment is always the one decided up front. An epic spin runs much longer with an
 // agonisingly slow final crawl.
-const RESPIN_CHANCE = 0.2;
+const RESPIN_CHANCE = 0.1;
+const BACKSTEP_CHANCE = 0.1;
 async function spin(items, target, duration = 3000, epic = false, gags = false) {
   win = null;
   wheelItems = items;
@@ -902,12 +903,22 @@ async function spin(items, target, duration = 3000, epic = false, gags = false) 
 
   const offset = (0.1 + Math.random() * 0.8) * seg;
   const F = angleFor(angle, target, offset, seg, rot);
+  // Sometimes it stops on the next segment, shows it, then rolls back onto the real one.
   // Past the stop point the pointer moves toward the segment's lower edge, which is `offset` away.
-  const over = n > 1 && Math.random() < (epic ? 0.6 : 0.4) ? offset + seg * (0.12 + Math.random() * 0.2) : 0;
+  const back = gags && n > 1 && Math.random() < BACKSTEP_CHANCE;
+  const over = back ? offset + seg * (0.35 + Math.random() * 0.3) : 0;
   const stopRiser = sfx.riser(duration / 1000);
   await rotate(items, F + over, duration, EASE.out(epic ? 6 : 4), heartFrom);
   stopRiser();
-  if (over) await rotate(items, F, 700, EASE.inOut);
+  if (back) {
+    win = { i: segmentAtPointer(n), t0: performance.now() }; winLoop();
+    gag('Выпало?..');
+    await wait(900 + Math.random() * 400);
+    win = null;
+    sfx.scratch(); shake(12, 400);
+    gag('…или нет!', 'red');
+    await rotate(items, F, 1000, EASE.inOut);
+  }
 }
 
 /* ---------- Show pieces ---------- */
