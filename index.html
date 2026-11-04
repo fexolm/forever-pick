@@ -159,7 +159,13 @@ input:focus { border-color: var(--gold); }
 .wheel-title .what { color: var(--muted); font: 600 12px Cinzel, serif; text-transform: uppercase; letter-spacing: .18em; }
 .wheel-title .who { font: 800 22px Cinzel, serif; color: var(--wow-yellow); text-shadow: 0 1px 0 #000; }
 .wheel-box { position: relative; width: min(100%, 400px); aspect-ratio: 1; margin: 0 auto; }
-.wheel-box canvas { width: 100%; height: 100%; display: block; }
+.wheel-box canvas { width: 100%; height: 100%; display: block; transition: filter .6s; }
+.gag { position: absolute; left: 50%; top: 50%; z-index: 3; opacity: 0; pointer-events: none; white-space: nowrap;
+  font: 800 clamp(22px, 5vw, 34px) Cinzel, serif; color: var(--wow-yellow); padding: 6px 16px; border-radius: 6px;
+  background: rgba(0,0,0,.75); border: 1px solid #8a6a2a; text-shadow: 0 2px 0 #000; transform: translate(-50%, -50%); }
+.gag.red { color: #ff5a46; border-color: #b3150f; box-shadow: 0 0 30px rgba(255,40,20,.6); }
+.wheel-box.epic canvas { animation: epicGlow 1.2s ease-in-out infinite; }
+@keyframes epicGlow { 0%, 100% { filter: drop-shadow(0 0 10px rgba(255,190,60,.35)); } 50% { filter: drop-shadow(0 0 34px rgba(255,190,60,.85)); } }
 .pointer {
   position: absolute; left: 50%; top: -8px; transform: translateX(-50%); z-index: 2;
   width: 0; height: 0; border-left: 15px solid transparent; border-right: 15px solid transparent; border-top: 30px solid var(--wow-yellow);
@@ -278,6 +284,7 @@ footer { text-align: center; color: #6c5a3d; font-size: 13px; margin-top: 28px; 
       <div class="wheel-title"><div class="what" id="what">&nbsp;</div><div class="who" id="who">Готов к роллу</div></div>
       <div class="wheel-box">
         <div class="pointer" id="pointer"></div>
+        <div class="gag" id="gag"></div>
         <canvas id="wheel" width="800" height="800"></canvas>
       </div>
       <div class="results">
@@ -325,8 +332,8 @@ const ROLES = {
   dps:  { name: 'Боец', color: '#c0392b', icon: 'assets/role-dps.png', classes: Object.keys(CLASSES) },
 };
 // Dungeon composition: roles are drawn without replacement from this pool.
-// Groups of up to 3 roll from tank/heal/dps; bigger groups from the full 5-man set.
-const rolePool = (n) => n <= 3 ? ['tank', 'heal', 'dps'] : ['tank', 'heal', 'dps', 'dps', 'dps'];
+// Always one tank and one healer; the remaining seats are damage (at least one DPS in the pool for tiny groups).
+const rolePool = (n) => ['tank', 'heal', ...Array(Math.max(1, n - 2)).fill('dps')];
 
 const RACES = {
   alliance: {
@@ -585,6 +592,17 @@ const sfx = {
     const t = audio().currentTime;
     tone(t, 'sine', 70, 45, 0.005, 0.5, 0.18, false); tone(t + 0.16, 'sine', 65, 40, 0.005, 0.35, 0.2, false);
   },
+  scratch() {
+    const t = audio().currentTime;
+    tone(t, 'sawtooth', 900, 60, 0.005, 0.18, 0.45);
+    noise(t, 0.4, 'bandpass', 4000, 200, 0.5, 2);
+  },
+  thunder() {
+    const t = audio().currentTime;
+    noise(t, 0.12, 'highpass', 2000, 2000, 0.6);
+    noise(t + 0.05, 2.2, 'lowpass', 900, 60, 0.9);
+    tone(t + 0.05, 'sine', 90, 30, 0.01, 0.9, 1.4);
+  },
   fanfare() {
     const t = audio().currentTime;
     const notes = [[392, 0], [523.25, 0.16], [659.25, 0.32], [783.99, 0.48]];
@@ -643,6 +661,14 @@ function fxLoop(now) {
       p.r += p.vr; p.vr *= 0.92;
       fctx.strokeStyle = hexA(p.color, k * 0.8); fctx.lineWidth = 3 * k + 1;
       fctx.beginPath(); fctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); fctx.stroke();
+      return true;
+    }
+    if (p.k === 'bolt') {
+      fctx.lineJoin = 'round';
+      [[14, 0.15], [5, 0.5], [2, 1]].forEach(([w, al]) => {
+        fctx.strokeStyle = w === 2 ? `rgba(255,255,255,${k})` : hexA(p.color, al * k); fctx.lineWidth = w;
+        fctx.beginPath(); p.pts.forEach(([x, y], j) => j ? fctx.lineTo(x, y) : fctx.moveTo(x, y)); fctx.stroke();
+      });
       return true;
     }
     if (p.k === 'flash') {
@@ -779,45 +805,130 @@ function pointerKick() {
   $('pointer').animate([{ transform: 'translateX(-50%) rotate(-22deg)' }, { transform: 'translateX(-50%) rotate(0deg)' }], { duration: 140, easing: 'ease-out' });
 }
 
-// Spin to a predetermined segment. The landing spot inside the segment and an occasional
-// overshoot into the neighbour ("almost!") are purely visual.
-function spin(items, target, duration = 3000) {
-  win = null;
-  wheelItems = items;
-  const n = items.length, seg = (Math.PI * 2) / n;
-  const offset = (0.1 + Math.random() * 0.8) * seg;
-  const base = ((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-  const desired = (Math.PI * 2 - (target * seg + offset)) % (Math.PI * 2);
+// Angle (in the wheel's frame) that puts the pointer inside segment i at `offset` from its lower edge,
+// reached from `from` after at least `rotations` full turns.
+function angleFor(from, i, offset, seg, rotations) {
+  const base = ((from % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  const desired = (Math.PI * 2 - (i * seg + offset)) % (Math.PI * 2);
   let delta = desired - base;
   if (delta < 0) delta += Math.PI * 2;
-  const start = angle, total = delta + Math.PI * 2 * (4 + Math.floor(Math.random() * 2));
-  // Past the stop point the pointer moves toward the segment's lower edge, which is `offset` away.
-  const over = n > 1 && Math.random() < 0.4 ? offset + seg * (0.12 + Math.random() * 0.2) : 0;
-  const settle = over ? 700 : 0;
+  return from + delta + Math.PI * 2 * rotations;
+}
+
+const EASE = {
+  out: (p) => (t) => 1 - Math.pow(1 - t, p),
+  inOut: (t) => 0.5 - 0.5 * Math.cos(Math.PI * t),
+};
+
+// One continuous motion of the wheel between two angles, with ticks, sparks and heartbeat.
+function rotate(items, to, dur, ease, heartFrom = 1) {
+  const n = items.length, from = angle;
   let last = segmentAtPointer(n), beat = 0;
   const [px, py] = centerOf($('pointer'));
-  const stopRiser = sfx.riser((duration + settle) / 1000);
   return new Promise((resolve) => {
     const t0 = performance.now();
     function frame(now) {
-      const el = now - t0;
-      if (el < duration) {
-        const t = el / duration;
-        angle = start + (total + over) * (1 - Math.pow(1 - t, 4));
-      } else {
-        const t = Math.min(1, (el - duration) / Math.max(settle, 1));
-        angle = start + total + over * (1 - (0.5 - 0.5 * Math.cos(Math.PI * t)));
-      }
+      const t = Math.min(1, (now - t0) / dur);
+      angle = from + (to - from) * ease(t);
       drawWheel();
       const cur = segmentAtPointer(n);
       if (cur !== last) { sfx.tick(); pointerKick(); trail(px, py + 18, items[cur].color); last = cur; }
-      // Heartbeat in the slow final stretch.
-      if (el > duration * 0.7 && now - beat > 650) { beat = now; sfx.heartbeat(); }
-      if (el < duration + settle) requestAnimationFrame(frame);
-      else { stopRiser(); resolve(); }
+      if (t > heartFrom && now - beat > 650) { beat = now; sfx.heartbeat(); }
+      if (t < 1) requestAnimationFrame(frame); else resolve();
     }
     requestAnimationFrame(frame);
   });
+}
+
+const FAKE_LINES = ['Не так быстро!', 'Боги против!', 'Гоблин подкрутил колесо!', 'Духи требуют переролл!', 'Кобольд дёрнул рычаг!', 'Это не твоя свеча!'];
+async function gag(text, cls = '') {
+  const g = $('gag');
+  g.textContent = text; g.className = 'gag ' + cls;
+  g.getAnimations().forEach((a) => a.cancel());
+  await g.animate([
+    { opacity: 0, transform: 'translate(-50%, -50%) scale(2.2) rotate(-8deg)' },
+    { opacity: 1, transform: 'translate(-50%, -50%) scale(1) rotate(-4deg)', offset: 0.2 },
+    { opacity: 1, transform: 'translate(-50%, -50%) scale(1.05) rotate(-4deg)', offset: 0.8 },
+    { opacity: 0, transform: 'translate(-50%, -50%) scale(.9) rotate(-4deg)' },
+  ], { duration: 1300, easing: 'ease-out' }).finished.catch(() => {});
+}
+function lightning() {
+  const [wx, wy] = centerOf($('wheel'));
+  for (let b = 0; b < 2; b++) {
+    const pts = [[wx + (Math.random() - 0.5) * 300, -10]];
+    const steps = 12;
+    for (let s = 1; s <= steps; s++) {
+      const t = s / steps, [x0, y0] = pts[0];
+      pts.push([x0 + (wx - x0) * t + (Math.random() - 0.5) * 70 * (1 - t), y0 + (wy - y0) * t]);
+    }
+    parts.push({ k: 'bolt', pts, life: 0, ttl: 22, color: '#9fd4ff' });
+  }
+  parts.push({ k: 'flash', x: wx, y: wy, life: 0, ttl: 20, size: 500, color: '#ff3b2f' });
+  burst(wx, wy, '#9fd4ff', 80, 12);
+}
+
+// Spin to a predetermined segment. Everything about how it gets there (landing spot, overshoot,
+// fake stops, freezes, reversals) is purely visual and drawn from Math.random, never from the seeded RNG.
+// An epic spin runs much longer with an agonisingly slow final crawl.
+async function spin(items, target, duration = 3000, epic = false, gags = false) {
+  win = null;
+  wheelItems = items;
+  const n = items.length, seg = (Math.PI * 2) / n;
+  if (epic) duration = 7500 + Math.random() * 2500;
+  const ease = EASE.out(epic ? 6 : 4);
+  const offset = (0.1 + Math.random() * 0.8) * seg;
+  const rot = (epic ? 9 : 4) + Math.floor(Math.random() * 2);
+  const r = Math.random();
+  const kind = !gags || n < 2 ? 'normal' : window.FORCE_GAG ? window.FORCE_GAG : r < 0.12 ? 'fake' : r < 0.22 ? 'freeze' : r < 0.3 ? 'reverse' : 'normal';
+  const heartFrom = epic ? 0.45 : 0.7;
+  let stopRiser = sfx.riser(duration / 1000);
+
+  if (kind === 'fake') {
+    // Lands convincingly on a decoy, then something intervenes and it re-spins for this player.
+    let d = Math.floor(Math.random() * (n - 1)); if (d >= target) d++;
+    await rotate(items, angleFor(angle, d, (0.35 + Math.random() * 0.3) * seg, seg, rot), duration, ease, heartFrom);
+    stopRiser();
+    win = { i: d, t0: performance.now() }; winLoop();
+    sfx.shimmer();
+    gag('Выпало?..');
+    await wait(1100);
+    win = null;
+    sfx.scratch(); sfx.thunder(); lightning(); shake(22, 600);
+    gag(FAKE_LINES[Math.floor(Math.random() * FAKE_LINES.length)], 'red');
+    await rotate(items, angle - seg * 0.6, 350, EASE.inOut);
+    stopRiser = sfx.riser(3.2);
+    await rotate(items, angleFor(angle, target, offset, seg, 3), 3200, EASE.out(4), 0.6);
+    stopRiser();
+    return;
+  }
+  if (kind === 'reverse') {
+    // Slows down, hesitates, whips backwards, then charges forward again.
+    await rotate(items, angle + Math.PI * 2 * (rot * 0.5), duration * 0.55, EASE.out(2));
+    gag('Назад?!');
+    sfx.scratch();
+    await rotate(items, angle - Math.PI * (1 + Math.random()), 1100, EASE.inOut);
+    stopRiser(); stopRiser = sfx.riser(duration * 0.8 / 1000);
+    await rotate(items, angleFor(angle, target, offset, seg, 2), duration * 0.8, ease, heartFrom);
+    stopRiser();
+    return;
+  }
+  const F = angleFor(angle, target, offset, seg, rot);
+  if (kind === 'freeze') {
+    // Stops just short, inside the neighbouring segment... holds... then clicks over into the real one.
+    const pre = F - (seg - offset) - seg * (0.08 + Math.random() * 0.1);
+    await rotate(items, pre, duration, ease, heartFrom);
+    stopRiser();
+    gag('…');
+    sfx.heartbeat(); await wait(650); sfx.heartbeat(); await wait(650);
+    gag('Ещё щелчок!');
+    await rotate(items, F, 1100, EASE.inOut);
+    return;
+  }
+  // Past the stop point the pointer moves toward the segment's lower edge, which is `offset` away.
+  const over = n > 1 && Math.random() < (epic ? 0.6 : 0.4) ? offset + seg * (0.12 + Math.random() * 0.2) : 0;
+  await rotate(items, F + over, duration, ease, heartFrom);
+  stopRiser();
+  if (over) await rotate(items, F, 700, EASE.inOut);
 }
 
 /* ---------- Show pieces ---------- */
@@ -902,9 +1013,12 @@ function keepWheelInView() {
   if (r.top < 0 || r.bottom > innerHeight) $('wheel').closest('.frame').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-async function pick(items, k, cardArgs, duration) {
+async function pick(items, k, cardArgs, duration, epic = false, gags = true) {
   keepWheelInView();
-  await spin(items, k, duration);
+  const box = document.querySelector('.wheel-box');
+  box.classList.toggle('epic', epic);
+  await spin(items, k, duration, epic, gags);
+  box.classList.remove('epic');
   win = { i: k, t0: performance.now() }; winLoop();
   const [px, py] = centerOf($('pointer'));
   burst(px, py + 30, items[k].color, 40, 6);
@@ -955,7 +1069,7 @@ async function rollAll() {
     // The slot is rendered hidden so the flying card has a place to land.
     results[i].role = p.role; renderResults(i, 'role');
     const items = poolSnap[i].map((r) => ({ icon: ROLES[r].icon, color: ROLES[r].color, round: true }));
-    await pick(items, p.roleK, [role, `Роль · ${playerName(i)}`, true, role.color, sel(i, 'role')]);
+    await pick(items, p.roleK, [role, `Роль · ${playerName(i)}`, true, role.color, sel(i, 'role')], undefined, Math.random() < 0.35);
   }
 
   await phaseBanner('Этап II', 'Классы');
@@ -965,7 +1079,7 @@ async function rollAll() {
     const cls = CLASSES[p.cls];
     setTitle(`Класс · ${ROLES[p.role].name}`, playerName(i));
     results[i].cls = p.cls; renderResults(i, 'cls');
-    await pick(p.clsOpts.map((c) => ({ icon: CLASSES[c].icon, color: CLASSES[c].color })), p.clsK, [cls, `Класс · ${playerName(i)}`, false, cls.color, sel(i, 'cls')]);
+    await pick(p.clsOpts.map((c) => ({ icon: CLASSES[c].icon, color: CLASSES[c].color })), p.clsK, [cls, `Класс · ${playerName(i)}`, false, cls.color, sel(i, 'cls')], undefined, Math.random() < 0.35);
   }
 
   await phaseBanner('Этап III', 'Расы');
@@ -976,7 +1090,7 @@ async function rollAll() {
     setTitle(`Раса · ${CLASSES[p.cls].name}`, playerName(i));
     results[i].race = p.race; renderResults(i, 'race');
     await pick(p.raceOpts.map((r) => ({ icon: races[r].icon, color: FACTION_COLOR[state.faction] })), p.raceK,
-      [race, `Раса · ${playerName(i)}`, false, RACE_GLOW[state.faction], sel(i, 'race')], p.raceOpts.length === 1 ? 1600 : 3000);
+      [race, `Раса · ${playerName(i)}`, false, RACE_GLOW[state.faction], sel(i, 'race')], p.raceOpts.length === 1 ? 1600 : 3000, false, false);
   }
 
   await phaseBanner('Финал', 'Лидер группы');
@@ -986,7 +1100,7 @@ async function rollAll() {
     return { icon: c ? c.icon : 'assets/question.png', color: c ? c.color : '#ffd100', label: playerName(i) };
   });
   leader = leaderK; renderResults(leaderK, 'leader');
-  await pick(leaderItems, leaderK, [{ name: playerName(leaderK), icon: LEADER.icon }, 'Лидер группы', false, '#ffd100', `#results .res:nth-child(${leaderK + 1}) img.star`], 3800);
+  await pick(leaderItems, leaderK, [{ name: playerName(leaderK), icon: LEADER.icon }, 'Лидер группы', false, '#ffd100', `#results .res:nth-child(${leaderK + 1}) img.star`], undefined, true);
   renderResults();
 
   setTitle('Готово', 'Группа собрана');
