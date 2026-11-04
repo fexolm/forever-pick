@@ -921,6 +921,46 @@ async function spin(items, target, duration = 3000, epic = false, gags = false) 
   }
 }
 
+// Scripted drama for the healer role (the outcome is already known to be the healer):
+// lands on healer, whips backwards onto something else, spins again, crawls past the healer onto
+// the next segment, almost stops... and flips back onto the healer.
+async function healDrama(items, target) {
+  win = null;
+  wheelItems = items;
+  const n = items.length, seg = (Math.PI * 2) / n;
+  const mid = () => (0.35 + Math.random() * 0.3) * seg;
+  let stop = sfx.riser(3);
+  await rotate(items, angleFor(angle, target, mid(), seg, 4), 3000, EASE.out(4), 0.7);
+  stop();
+  win = { i: target, t0: performance.now() }; winLoop();
+  sfx.shimmer(); gag('Хил!');
+  await wait(1100);
+  win = null;
+
+  sfx.scratch(); shake(16, 500); gag('Назад?!', 'red');
+  let d = Math.floor(Math.random() * (n - 1)); if (d >= target) d++;
+  await rotate(items, angleFor(angle, d, mid(), seg, 0) - Math.PI * 4, 2600, EASE.out(3), 0.6);
+  win = { i: d, t0: performance.now() }; winLoop();
+  gag(`Не хил…`);
+  await wait(1100);
+  win = null;
+
+  sfx.thunder(); lightning(); shake(20, 600); gag('Ещё раз!', 'red');
+  const offset = (0.2 + Math.random() * 0.5) * seg;
+  const F = angleFor(angle, target, offset, seg, 5);
+  stop = sfx.riser(7);
+  // Crawl over the healer and just into the next segment.
+  await rotate(items, F + offset + seg * (0.15 + Math.random() * 0.15), 7000, EASE.out(6), 0.4);
+  stop();
+  win = { i: segmentAtPointer(n), t0: performance.now() }; winLoop();
+  gag('…');
+  sfx.heartbeat(); await wait(650); sfx.heartbeat(); await wait(650);
+  win = null;
+  sfx.scratch(); sfx.thunder(); lightning(); shake(24, 700);
+  gag('ХИЛ!!!', 'red');
+  await rotate(items, F, 900, EASE.inOut);
+}
+
 /* ---------- Show pieces ---------- */
 async function phaseBanner(kick, text) {
   $('bannerKick').textContent = kick; $('bannerText').textContent = text;
@@ -1003,11 +1043,11 @@ function keepWheelInView() {
   if (r.top < 0 || r.bottom > innerHeight) $('wheel').closest('.frame').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-async function pick(items, k, cardArgs, duration, epic = false, gags = true) {
+async function pick(items, k, cardArgs, duration, epic = false, gags = true, drama = false) {
   keepWheelInView();
   const box = document.querySelector('.wheel-box');
   box.classList.toggle('epic', epic);
-  await spin(items, k, duration, epic, gags);
+  await (drama ? healDrama(items, k) : spin(items, k, duration, epic, gags));
   box.classList.remove('epic');
   win = { i: k, t0: performance.now() }; winLoop();
   const [px, py] = centerOf($('pointer'));
@@ -1059,7 +1099,9 @@ async function rollAll() {
     // The slot is rendered hidden so the flying card has a place to land.
     results[i].role = p.role; renderResults(i, 'role');
     const items = poolSnap[i].map((r) => ({ icon: ROLES[r].icon, color: ROLES[r].color, round: true }));
-    await pick(items, p.roleK, [role, `Роль · ${playerName(i)}`, true, role.color, sel(i, 'role')], undefined, Math.random() < 0.35);
+    // The healer gets the full scripted drama, unless it's the last seat and nothing else was left.
+    const drama = p.role === 'heal' && poolSnap[i].length > 1;
+    await pick(items, p.roleK, [role, `Роль · ${playerName(i)}`, true, role.color, sel(i, 'role')], undefined, Math.random() < 0.35, true, drama);
   }
 
   await phaseBanner('Этап II', 'Классы');
