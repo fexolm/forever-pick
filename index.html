@@ -840,7 +840,7 @@ function rotate(items, to, dur, ease, heartFrom = 1) {
   });
 }
 
-const FAKE_LINES = ['Не так быстро!', 'Боги против!', 'Гоблин подкрутил колесо!', 'Духи требуют переролл!', 'Кобольд дёрнул рычаг!', 'Это не твоя свеча!'];
+const FAKE_LINES = ['Ещё раз!', 'Не так быстро!', 'Боги против!', 'Гоблин подкрутил колесо!', 'Духи требуют переролл!', 'Кобольд дёрнул рычаг!', 'Это не твоя свеча!'];
 async function gag(text, cls = '') {
   const g = $('gag');
   g.textContent = text; g.className = 'gag ' + cls;
@@ -867,66 +867,45 @@ function lightning() {
   burst(wx, wy, '#9fd4ff', 80, 12);
 }
 
-// Spin to a predetermined segment. Everything about how it gets there (landing spot, overshoot,
-// fake stops, freezes, reversals) is purely visual and drawn from Math.random, never from the seeded RNG.
-// An epic spin runs much longer with an agonisingly slow final crawl.
+// Spin to a predetermined segment. On the way, each time the wheel is about to stop there is a 20%
+// chance it gets kicked back into motion, again and again. Those intermediate near-stops land on
+// uniformly random segments and use Math.random, never the seeded RNG, so they don't change odds:
+// the final segment is always the one decided up front. An epic spin runs much longer with an
+// agonisingly slow final crawl.
+const RESPIN_CHANCE = 0.2;
 async function spin(items, target, duration = 3000, epic = false, gags = false) {
   win = null;
   wheelItems = items;
   const n = items.length, seg = (Math.PI * 2) / n;
   if (epic) duration = 7500 + Math.random() * 2500;
-  const ease = EASE.out(epic ? 6 : 4);
-  const offset = (0.1 + Math.random() * 0.8) * seg;
-  const rot = (epic ? 9 : 4) + Math.floor(Math.random() * 2);
-  const r = Math.random();
-  const kind = !gags || n < 2 ? 'normal' : window.FORCE_GAG ? window.FORCE_GAG : r < 0.12 ? 'fake' : r < 0.22 ? 'freeze' : r < 0.3 ? 'reverse' : 'normal';
   const heartFrom = epic ? 0.45 : 0.7;
-  let stopRiser = sfx.riser(duration / 1000);
+  let rot = (epic ? 9 : 4) + Math.floor(Math.random() * 2);
+  let respins = 0;
 
-  if (kind === 'fake') {
-    // Lands convincingly on a decoy, then something intervenes and it re-spins for this player.
-    let d = Math.floor(Math.random() * (n - 1)); if (d >= target) d++;
-    await rotate(items, angleFor(angle, d, (0.35 + Math.random() * 0.3) * seg, seg, rot), duration, ease, heartFrom);
+  while (gags && Math.random() < RESPIN_CHANCE) {
+    const d = Math.floor(Math.random() * n);
+    const stopRiser = sfx.riser(duration / 1000);
+    // Crawl almost to a halt on a random segment...
+    await rotate(items, angleFor(angle, d, (0.3 + Math.random() * 0.4) * seg, seg, rot), duration, EASE.out(epic ? 6 : 4), heartFrom);
     stopRiser();
     win = { i: d, t0: performance.now() }; winLoop();
-    sfx.shimmer();
-    gag('Выпало?..');
-    await wait(1100);
+    gag(respins ? 'Опять?!' : 'Выпало?..');
+    await wait(500 + Math.random() * 400);
     win = null;
+    // ...and something kicks it back into motion.
+    respins++;
     sfx.scratch(); sfx.thunder(); lightning(); shake(22, 600);
     gag(FAKE_LINES[Math.floor(Math.random() * FAKE_LINES.length)], 'red');
-    await rotate(items, angle - seg * 0.6, 350, EASE.inOut);
-    stopRiser = sfx.riser(3.2);
-    await rotate(items, angleFor(angle, target, offset, seg, 3), 3200, EASE.out(4), 0.6);
-    stopRiser();
-    return;
+    await rotate(items, angle - seg * 0.5, 300, EASE.inOut);
+    duration = 3000 + Math.random() * 2000; rot = 3 + Math.floor(Math.random() * 3);
   }
-  if (kind === 'reverse') {
-    // Slows down, hesitates, whips backwards, then charges forward again.
-    await rotate(items, angle + Math.PI * 2 * (rot * 0.5), duration * 0.55, EASE.out(2));
-    gag('Назад?!');
-    sfx.scratch();
-    await rotate(items, angle - Math.PI * (1 + Math.random()), 1100, EASE.inOut);
-    stopRiser(); stopRiser = sfx.riser(duration * 0.8 / 1000);
-    await rotate(items, angleFor(angle, target, offset, seg, 2), duration * 0.8, ease, heartFrom);
-    stopRiser();
-    return;
-  }
+
+  const offset = (0.1 + Math.random() * 0.8) * seg;
   const F = angleFor(angle, target, offset, seg, rot);
-  if (kind === 'freeze') {
-    // Stops just short, inside the neighbouring segment... holds... then clicks over into the real one.
-    const pre = F - (seg - offset) - seg * (0.08 + Math.random() * 0.1);
-    await rotate(items, pre, duration, ease, heartFrom);
-    stopRiser();
-    gag('…');
-    sfx.heartbeat(); await wait(650); sfx.heartbeat(); await wait(650);
-    gag('Ещё щелчок!');
-    await rotate(items, F, 1100, EASE.inOut);
-    return;
-  }
   // Past the stop point the pointer moves toward the segment's lower edge, which is `offset` away.
   const over = n > 1 && Math.random() < (epic ? 0.6 : 0.4) ? offset + seg * (0.12 + Math.random() * 0.2) : 0;
-  await rotate(items, F + over, duration, ease, heartFrom);
+  const stopRiser = sfx.riser(duration / 1000);
+  await rotate(items, F + over, duration, EASE.out(epic ? 6 : 4), heartFrom);
   stopRiser();
   if (over) await rotate(items, F, 700, EASE.inOut);
 }
